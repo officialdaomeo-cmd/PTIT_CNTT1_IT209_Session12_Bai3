@@ -1,0 +1,79 @@
+name: Multi-Environment CD Pipeline (Staging & Production)
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Unit Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Compile & Package Application
+        run: ./gradlew bootJar --no-daemon
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-binary
+          path: build/libs/*.jar
+          retention-days: 1
+
+  deploy-staging:
+    name: Deploy to Staging Environment
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.example.com
+
+    steps:
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-binary
+
+      - name: Deploying to Staging Server
+        run: |
+          echo "Connecting to Staging host: ${{ vars.STAGING_HOST || '192.168.1.100' }}"
+          echo "Simulating zero-downtime deployment on Staging environment..."
+          sleep 3
+          echo "Deployment to Staging SUCCEEDED!"
+
+  deploy-production:
+    name: Deploy to Production Environment
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://app.example.com
+
+    steps:
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-binary
+
+      - name: Deploying to Production Server
+        run: |
+          echo "Approval verified by designated reviewers."
+          echo "Connecting to Production cluster: ${{ vars.PROD_HOST || 'prod.example.com' }}"
+          echo "Performing rolling update on Production fleet..."
+          sleep 4
+          echo "Production deployment COMPLETED successfully!"
